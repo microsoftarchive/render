@@ -1,0 +1,47 @@
+{
+  "owner": [
+    "email@example.com"
+  ],
+  "sources": [
+    "_connecty",
+    "_statsite",
+    "_dnsperf",
+    "config/test/setup"
+  ],
+  "security_groups": [
+    "notes"
+  ],
+  "ami": "ami-75c1a802",
+  "instance_type": "c3.large",
+  "docker": true,
+  "repos": [
+    {
+      "url": "git@github.com:wunderlist/render.git",
+      "folder": "app",
+      "sha": "9815f49"
+    },
+    {
+      "url": "git@github.com:wunderlist/render.git",
+      "folder": "appmaster"
+    }
+  ],
+  "types": {
+    "web": {
+      "processes": {
+        "consul_client": "start-consul",
+        "connecty": "connecty",
+        "statsite": "/opt/statsite/statsite -f /opt/statsite/statsite.ini",
+        "fubar": "while true; do echo fu; sleep 1; done"
+      },
+      "cron_jobs": [
+        "*/1 * * * * echo `date` >> /opt/cron.log",
+        "*/1 * * * * echo $WAKE_APP_NAME >> /opt/cron.log"
+      ]
+    },
+    "worker": {
+      "processes": {
+        "consul_client": "start-consul"
+      }
+    }
+  }
+}
