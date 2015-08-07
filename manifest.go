@@ -14,12 +14,14 @@ type RunDefinition struct {
 }
 
 type Manifest struct {
-	ServerType string `json:omit`
-	Platform   string `json:"platform"`
-	Owner      []string
-	Types      map[string]RunDefinition
-	Repos      []Repo
+	ServerType   string `json:omit`
+	Platform     string `json:"platform"`
+	BuildCommand string `json:"build"`
+	Owner        []string
+	Types        map[string]RunDefinition
+	Repos        []Repo
 }
+
 type Repo struct {
 	Url    string
 	Folder string

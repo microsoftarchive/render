@@ -167,7 +167,9 @@ func writeDatabaseConfig(app string) {
 	}
 }
 
-func buildExecutable(platform string, app string, rev string) {
+func buildExecutable(projectPath string, m Manifest, app string, rev string) {
+	if m.BuildCommand == "" { return }
+
 	if debug {
 		fmt.Println("Build executable")
 	}
@@ -175,54 +177,39 @@ func buildExecutable(platform string, app string, rev string) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	if platform == "golang" {
-		for _, p := range strings.Split(os.Getenv("PROJECT_PATH"), ":") {
-			project := fmt.Sprintf("%s/%s", p, app)
-			f, err := os.Open(project)
-			if err == nil {
-				if i, _ := f.Stat(); i.IsDir() {
 
-					curr, err := os.Getwd()
-					if err != nil {
-						fmt.Println(err)
-						return
-					}
-					err = os.Chdir(project)
-					if err != nil {
-						fmt.Println(err)
-						return
-					}
-					cmd := exec.Command("git", "checkout", rev)
-					_, err = cmd.Output()
-					if err != nil {
-						if debug {
-							fmt.Fprintf(os.Stderr, "  Cannot checkout %s: %s\n", rev, err)
-						}
-						os.Exit(1)
-					}
-					target := fmt.Sprintf("%s/tmp/bin/%s", curr, app)
-					cmd = exec.Command("go", "build", "-o", target)
-					cmd.Env = append(os.Environ(), "GOOS=linux")
-					cmd.Env = append(cmd.Env, "GOARCH=amd64")
-					cmd.Env = append(cmd.Env, "CGO_ENABLED=0")
-					_, err = cmd.Output()
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "  Cannot build %s: %s\n", app, err)
-						return
-					}
-					cmd = exec.Command("git", "checkout", "-")
-					_, err = cmd.Output()
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "  Cannot checkout %s: %s\n", rev, err)
-						return
-					}
-					err = os.Chdir(curr)
-					if err != nil {
-						fmt.Println(err)
-						return
-					}
-				}
+
+	project := fmt.Sprintf("%s/%s", projectPath, app)
+	f, err := os.Open(project)
+	if err == nil {
+		if i, _ := f.Stat(); i.IsDir() {
+			curr, err := os.Getwd()
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
+			err = os.Chdir(project)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			target := fmt.Sprintf("%s/tmp/bin/", curr)
+			cmd := exec.Command(m.BuildCommand)
+			cmd.Env = append([]string{}, fmt.Sprintf("REVISON=%s", rev))
+			cmd.Env = append(cmd.Env, fmt.Sprintf("TARGET=%s", target))
+			_, err = cmd.Output()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "  Cannot build %s: %s\n", app, err)
+				return
+			}
+			err = os.Chdir(curr)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+
 		}
 	}
 }
@@ -266,6 +253,6 @@ func main() {
 	cloneRepos(m)
 	writeConsulEnv(*app)
 	writeApi()
-	buildExecutable(m.Platform, *app, *rev)
+	buildExecutable(projectPath, m, *app, *rev)
 	writeDatabaseConfig(*app)
 }
