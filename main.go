@@ -195,7 +195,9 @@ func buildExecutable(projectPath string, m Manifest, app string, rev string) {
 			}
 
 			target := fmt.Sprintf("%s/tmp/bin/", curr)
-			cmd := exec.Command(m.BuildCommand, rev, target)
+			cmd := exec.Command(m.BuildCommand)
+			cmd.Env = append([]string{}, fmt.Sprintf("REVISON=%s", rev))
+			cmd.Env = append(cmd.Env, fmt.Sprintf("TARGET=%s", target))
 			_, err = cmd.Output()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  Cannot build %s: %s\n", app, err)
