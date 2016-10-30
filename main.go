@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -80,29 +81,33 @@ func cloneRepos(m Manifest) {
 		fmt.Println(err)
 	}
 	for _, r := range m.Repos {
-		path := fmt.Sprintf("tmp/repos/%s", r.Folder)
-		cmd := exec.Command("git", "clone", r.Url, path)
-		_, err := cmd.Output()
-		if err != nil {
-			fmt.Println(err)
-		}
-		curr, err := os.Getwd()
-		if err != nil {
-			fmt.Println(err)
-		}
-		err = os.Chdir(path)
-		if err != nil {
-			fmt.Println(err)
-		}
-		cmd = exec.Command("git", "reset", "--hard", r.Sha())
-		_, err = cmd.Output()
-		if err != nil {
-			fmt.Println(err)
-		}
-		err = os.Chdir(curr)
-		if err != nil {
-			fmt.Println(err)
-		}
+		cloneRepo(r)
+	}
+}
+
+func cloneRepo(r Repo) {
+	path := fmt.Sprintf("tmp/repos/%s", r.Folder)
+	cmd := exec.Command("git", "clone", r.Url, path)
+	_, err := cmd.Output()
+	if err != nil {
+		fmt.Println(err)
+	}
+	curr, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = os.Chdir(path)
+	if err != nil {
+		fmt.Println(err)
+	}
+	cmd = exec.Command("git", "reset", "--hard", r.Sha())
+	_, err = cmd.Output()
+	if err != nil {
+		fmt.Println(err)
+	}
+	err = os.Chdir(curr)
+	if err != nil {
+		fmt.Println(err)
 	}
 }
 
@@ -168,48 +173,86 @@ func writeDatabaseConfig(app string) {
 }
 
 func buildExecutable(projectPath string, m Manifest, app string, rev string) {
-	if m.BuildCommand == "" { return }
+	if m.BuildCommand == "" {
+		return
+	}
 
 	if debug {
 		fmt.Println("Build executable")
 	}
+
 	err := os.MkdirAll("tmp/bin", 0755)
 	if err != nil {
 		fmt.Println(err)
 	}
+	target := expandPath("tmp/bin/")
 
-
-	project := fmt.Sprintf("%s/%s", projectPath, app)
-	f, err := os.Open(project)
-	if err == nil {
-		if i, _ := f.Stat(); i.IsDir() {
-			curr, err := os.Getwd()
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			err = os.Chdir(project)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			target := fmt.Sprintf("%s/tmp/bin/", curr)
+	changeDirectory(projectPath, func(original string, curr string) {
+		gitCheckout(rev, func() {
 			cmd := exec.Command(m.BuildCommand)
-			cmd.Env = append([]string{}, fmt.Sprintf("REVISON=%s", rev))
 			cmd.Env = append(cmd.Env, fmt.Sprintf("TARGET=%s", target))
 			_, err = cmd.Output()
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "  Cannot build %s: %s\n", app, err)
 				return
 			}
-			err = os.Chdir(curr)
+		})
+	})
+}
+
+func copySrc(projectPath string) {
+}
+
+func gitCheckout(rev string, cb func()) {
+	gitCheckoutCommand := fmt.Sprintf("git checkout %s", rev)
+	cmd := exec.Command(gitCheckoutCommand)
+	_, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  Cannot checkout %s\n", rev)
+		return
+	}
+
+	cb()
+
+	cmd = exec.Command("git checkout -")
+	_, err = cmd.Output()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  Cannot checkout previous branch or revision\n", rev)
+		return
+	}
+}
+
+func expandPath(path string) string {
+	curr, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	target := fmt.Sprintf("%s/tmp/bin/", curr)
+	return target
+}
+
+func changeDirectory(path string, cb func(string, string)) {
+	f, err := os.Open(path)
+	if err == nil {
+		if i, _ := f.Stat(); i.IsDir() {
+			original, err := os.Getwd()
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			err = os.Chdir(path)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
 
+			cb(original, path)
 
+			err = os.Chdir(original)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 		}
 	}
 }
@@ -254,5 +297,6 @@ func main() {
 	writeConsulEnv(*app)
 	writeApi()
 	buildExecutable(projectPath, m, *app, *rev)
+	copySrc(projectPath)
 	writeDatabaseConfig(*app)
 }
